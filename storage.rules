@@ -1,0 +1,115 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() { return request.auth != null; }
+    // BEGIN GENERATED ROLE CAPABILITIES
+    function roleCapability(r, area, action) {
+      return r == 'super-admin' ? true : r == 'admin' ? (action == 'view' ? area in ['dashboard','leads','campaigns','employees','managers','admins','departments','payments','reports','forms','sheets','management','attendance','compensation','settings','wallet','profile'] : action == 'add' ? area in ['leads','campaigns','employees','managers','departments','payments','forms','sheets','management'] : action == 'edit' ? area in ['leads','campaigns','employees','managers','admins','departments','payments','forms','sheets','management','compensation','settings','profile'] : action == 'delete' ? area in ['leads','campaigns','employees','managers','departments','payments','forms','sheets','management'] : action == 'assign' ? area in ['leads','campaigns','managers'] : action == 'export' ? area in ['leads','campaigns','employees','managers','departments','payments','reports','forms','sheets','management','attendance','compensation','wallet'] : action == 'manage' ? area in ['payments','access'] : false) :
+        r == 'manager' ? (action == 'view' ? area in ['dashboard','leads','campaigns','employees','payments','reports','management','attendance','compensation','wallet','profile'] : action == 'add' ? area in ['leads','campaigns','employees','payments','management'] : action == 'edit' ? area in ['leads','campaigns','employees','payments','management','compensation','profile'] : action == 'delete' ? area in ['leads','campaigns','employees','payments','management'] : action == 'assign' ? area in ['leads','campaigns'] : action == 'export' ? area in ['leads','campaigns','employees','payments','reports','management','attendance','compensation','wallet'] : action == 'manage' ? area in ['payments'] : false) :
+        r == 'employee' ? (action == 'view' ? area in ['dashboard','leads','campaigns','payments','management','attendance','wallet','profile'] : action == 'add' ? area in ['leads','payments','management'] : action == 'edit' ? area in ['leads','payments','management','profile'] : action == 'delete' ? area in ['leads','payments','management'] : action == 'assign' ? area in ['leads'] : action == 'export' ? area in ['leads','campaigns','payments','management','attendance','wallet'] : action == 'manage' ? area in ['payments'] : false) : false;
+    }
+    function roleDefault(r, area, action) {
+      return r == 'super-admin' ? true : r == 'admin' ? (action == 'view' ? area in ['dashboard','leads','campaigns','employees','managers','admins','departments','payments','reports','forms','sheets','management','attendance','compensation','settings','wallet','profile'] : action == 'add' ? area in ['leads','campaigns','employees','managers','departments','payments','forms','sheets','management'] : action == 'edit' ? area in ['leads','campaigns','employees','managers','admins','departments','payments','forms','sheets','management','compensation','settings','profile'] : action == 'delete' ? area in ['leads','campaigns','employees','managers','departments','payments','forms','sheets','management'] : action == 'assign' ? area in ['leads','campaigns','managers'] : action == 'export' ? area in ['leads','campaigns','employees','managers','departments','payments','reports','forms','sheets','management','attendance','compensation','wallet'] : action == 'manage' ? area in ['payments','access'] : false) :
+        r == 'manager' ? (action == 'view' ? area in ['dashboard','leads','campaigns','employees','payments','reports','management','attendance','compensation','wallet','profile'] : action == 'add' ? area in ['leads','campaigns','employees','payments','management'] : action == 'edit' ? area in ['leads','campaigns','employees','payments','management','profile'] : action == 'delete' ? area in ['leads','campaigns','employees'] : action == 'assign' ? area in ['leads','campaigns'] : action == 'export' ? area in ['leads','campaigns','employees','reports'] : action == 'manage' ? area in ['payments'] : false) :
+        r == 'employee' ? (action == 'view' ? area in ['dashboard','leads','campaigns','payments','management','attendance','wallet','profile'] : action == 'add' ? area in ['leads','payments'] : action == 'edit' ? area in ['leads','payments','management','profile'] : action == 'export' ? area in ['leads'] : false) : false;
+    }
+    function permissionEnabled(user, r, area, action) {
+      let permissions = user.get('permissions',{});
+      let key = area + '_' + action;
+      return (r == 'admin' && user.get('permissionsVersion',0) < 2 && action == 'delete' && area in ['leads','employees','managers','departments','forms','management']) || (key in permissions ? permissions[key] == true : roleDefault(r,area,action));
+    }
+    // END GENERATED ROLE CAPABILITIES
+    function cap(area,action) { let user = firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data; let r = user.get('role',''); return signedIn() && roleCapability(r,area,action) && user.get('active',true) != false && (r == 'super-admin' || permissionEnabled(user,r,area,action)); }
+    function role() { return signedIn() ? firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.get('role',null) : null; }
+    function isTopManagement() { return role() == 'super-admin' || role() == 'admin'; }
+    function managesDepartment(id) {
+      let data=id is string && id.size() > 0 ? firestore.get(/databases/(default)/documents/departments/$(id)).data : {};
+      return role() == 'manager' && ('managerIds' in data ? request.auth.uid in data.managerIds : data.get('managerId','') == request.auth.uid);
+    }
+    function manages(uid) {
+      let user=uid is string && uid.size() > 0 ? firestore.get(/databases/(default)/documents/users/$(uid)).data : {};
+      return role() == 'manager' && user.get('role','') == 'employee' && user.get('managerId','') == request.auth.uid;
+    }
+    function authorizedTicketUpload(path) {
+      let ticket=firestore.get(/databases/(default)/documents/fileUploadTickets/$(request.resource.metadata.uploadTicket)).data;
+      return ticket.uid == request.auth.uid && ticket.path == path && ticket.expiresAt > request.time &&
+        request.resource.size > 0 && request.resource.size == ticket.size && request.resource.contentType == ticket.contentType &&
+        request.resource.contentType in ['image/webp','application/pdf'] && cap(ticket.area,ticket.action);
+    }
+    function ticketUpload(path) {
+      return signedIn() && request.resource.metadata.get('uploadTicket','').matches('[a-f0-9-]{36}') && authorizedTicketUpload(path);
+    }
+
+    function accessesLead(leadId) {
+      let lead = firestore.get(/databases/(default)/documents/leads/$(leadId)).data;
+      return signedIn() && (isTopManagement() || (role() in ['employee','manager'] && (lead.get('ownerUid','') == request.auth.uid || (lead.get('ownerUid',null) in [null,''] && lead.get('managerPoolUid','') == request.auth.uid))) || manages(lead.get('ownerUid','')));
+    }
+    match /leadDocuments/{leadId}/{documentId}/{fileName} {
+      allow read: if cap('leads','view') && accessesLead(leadId);
+      allow create: if ticketUpload('leadDocuments/'+leadId+'/'+documentId+'/'+fileName);
+      allow update, delete: if false;
+    }
+    match /leadUploads/{leadId}/{ticketId}/{fileName} {
+      function validUpload(){
+        let ticket=firestore.get(/databases/(default)/documents/leadUploadState/tickets/uploads/$(ticketId)).data;
+        return ticket.claimedLeadId == null && ticket.expiresAt > request.time && ticket.reservedLeadId == leadId &&
+          ticket.file.name == fileName && request.resource.size == ticket.file.size && request.resource.contentType == ticket.file.contentType &&
+          request.resource.contentDisposition.matches('attachment;.*') &&
+          ((ticket.uid != null && signedIn() && request.auth.uid == ticket.uid && (cap('leads','add') || cap('leads','edit'))) ||
+           (ticket.uid == null && ticket.formId is string && firestore.get(/databases/(default)/documents/leadForms/$(ticket.formId)).data.get('active',true) != false));
+      }
+      allow create: if validUpload();
+      allow read: if cap('leads','view') && accessesLead(leadId);
+      allow update,delete: if false;
+    }
+
+    match /departmentReceipts/{departmentId}/{uid}/{paymentId}/{fileName} {
+      allow read: if cap('payments','view') && ((role() == 'employee' && request.auth.uid == uid) || isTopManagement() || (role() == 'manager' && request.auth.uid == uid) || manages(uid));
+      allow create: if ticketUpload('departmentReceipts/'+departmentId+'/'+uid+'/'+paymentId+'/'+fileName);
+      allow delete: if cap('payments','delete') && ((role() == 'employee' && request.auth.uid == uid) || isTopManagement() || (role() == 'manager' && request.auth.uid == uid) || manages(uid));
+      allow update: if false;
+    }
+    match /receipts/{uid}/{paymentId}/{fileName} {
+      function receiptOwner() {
+        // The UID is the receipt's owner, including when a lead ID is used in
+        // place of a payment ID. Do not read a missing payment or exceed the
+        // Storage rules limit of two Firestore documents during an upload.
+        return request.auth.uid == uid || isTopManagement() || manages(uid);
+      }
+      allow read: if cap('payments','view') && (receiptOwner() || accessesLead(paymentId));
+      allow create: if ticketUpload('receipts/'+uid+'/'+paymentId+'/'+fileName);
+      allow update: if false;
+      allow delete: if cap('payments','delete') && (receiptOwner() || accessesLead(paymentId));
+    }
+
+    match /profiles/{uid}/{fileName} {
+      function accountArea() { let target = firestore.get(/databases/(default)/documents/users/$(uid)).data; return target.role == 'employee' ? 'employees' : target.role == 'manager' ? 'managers' : 'admins'; }
+      function editableAccount() { let target = firestore.get(/databases/(default)/documents/users/$(uid)).data; return request.auth.uid == uid || role() == 'super-admin' || (role() == 'admin' && target.role in ['employee','manager']) || (role() == 'manager' && request.auth.uid == uid) || manages(uid); }
+      allow read: if signedIn() && (request.auth.uid == uid ? cap('profile','view') : cap(accountArea(),'view')) && editableAccount();
+      allow create: if ticketUpload('profiles/'+uid+'/'+fileName);
+      allow update: if false;
+      allow delete: if signedIn() && (request.auth.uid == uid ? cap('profile','edit') : cap(accountArea(),'edit')) && editableAccount();
+    }
+
+    match /branding/{fileName} {
+      allow read: if true;
+      allow create: if ticketUpload('branding/'+fileName);
+      allow update: if false;
+      allow delete: if role() == 'super-admin';
+    }
+
+    function safeReleaseBundle() {
+      return request.resource.size < 500 * 1024 * 1024 &&
+        (request.resource.contentType == 'application/gzip' ||
+         request.resource.contentType == 'application/x-gzip' ||
+         request.resource.contentType == 'application/octet-stream' ||
+         request.resource.contentType == 'application/x-tar');
+    }
+
+    match /noddesk-deploy/{fileName} {
+      allow read: if role() == 'super-admin';
+      allow write: if role() == 'super-admin' && safeReleaseBundle();
+      allow delete: if role() == 'super-admin';
+    }
+  }
+}

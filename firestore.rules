@@ -1,0 +1,497 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function validRole(r) {
+      return r == 'super-admin' || r == 'admin' || r == 'manager' || r == 'employee';
+    }
+    function role() {
+      return signedIn() ? selfUser().get('role',null) : null;
+    }
+    function isSuper() { return role() == 'super-admin'; }
+    function isAdmin() { return role() == 'admin'; }
+    function isManager() { return role() == 'manager'; }
+    function isEmployee() { return role() == 'employee'; }
+    function isTopManagement() { return role() in ['super-admin','admin']; }
+    function isManagement() { return role() in ['super-admin','admin','manager']; }
+    function own(uid) { return signedIn() && request.auth.uid == uid; }
+    function managesEmployee(uid) {
+      return isManager() && uid is string && uid.size() > 0 &&
+        managedEmployeeData(get(/databases/$(database)/documents/users/$(uid)).data);
+    }
+    function departmentOwned(id) {
+      let data=id is string && id.size() > 0 ? get(/databases/$(database)/documents/departments/$(id)).data : {};
+      return 'managerIds' in data ? request.auth.uid in data.managerIds : data.get('managerId','') == request.auth.uid;
+    }
+    function managesDepartment(id) { return isManager() && departmentOwned(id); }
+    function managedEmployeeData(data) {
+      return data.get('role','') == 'employee' && data.get('managerId','') == request.auth.uid;
+    }
+    function validDepartmentOwner(data) {
+      let owner=data.get('ownerUid',null);
+      let user=owner is string && owner.size() > 0 ? get(/databases/$(database)/documents/users/$(owner)).data : {};
+      return owner == null || (user.get('role','') == 'employee' && user.get('active',true) != false &&
+        (user.get('departmentId',null) == data.get('departmentId',null) || data.get('departmentId','') in user.get('departmentIds',[])));
+    }
+    function managerLeadData(data) {
+      let owner=data.get('ownerUid',null);
+      let employee=owner is string && owner.size() > 0 ? get(/databases/$(database)/documents/users/$(owner)).data : {};
+      return owner == request.auth.uid || ((owner == null || owner == '') && data.get('managerPoolUid','') == request.auth.uid) || managedEmployeeData(employee);
+    }
+    function managesLead(data) { return isManager() && managerLeadData(data); }
+    function managesSale(data) { return (isManager() && data.get('employeeUid','') == request.auth.uid) || managesEmployee(data.get('employeeUid','')); }
+    function ownsLead(data) { return data.get('ownerUid','') == request.auth.uid || (data.get('ownerUid',null) in [null,''] && data.get('managerPoolUid','') == request.auth.uid); }
+    function selfUser() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function assignedDepartment(id) {
+      let user=selfUser();
+      return user.get('active',true) != false && (isTopManagement() || (id is string && id.size() > 0 &&
+        (id == user.get('departmentId',null) || id in user.get('departmentIds',[]) ||
+          (user.get('role','') == 'manager' && (id in user.get('managedDepartmentIds',[]) || departmentOwned(id))))));
+    }
+    function assignedCategory(id,data) {
+      let user=selfUser();
+      return isTopManagement() || (assignedDepartment(data.get('departmentId',null)) &&
+        (user.get('leadCategoryIds',null) == null || id in user.get('leadCategoryIds',[])));
+    }
+    // BEGIN GENERATED ROLE CAPABILITIES
+    function roleCapability(r, area, action) {
+      return r == 'super-admin' ? true : r == 'admin' ? (action == 'view' ? area in ['dashboard','leads','campaigns','employees','managers','admins','departments','payments','reports','forms','sheets','management','attendance','compensation','settings','wallet','profile'] : action == 'add' ? area in ['leads','campaigns','employees','managers','departments','payments','forms','sheets','management'] : action == 'edit' ? area in ['leads','campaigns','employees','managers','admins','departments','payments','forms','sheets','management','compensation','settings','profile'] : action == 'delete' ? area in ['leads','campaigns','employees','managers','departments','payments','forms','sheets','management'] : action == 'assign' ? area in ['leads','campaigns','managers'] : action == 'export' ? area in ['leads','campaigns','employees','managers','departments','payments','reports','forms','sheets','management','attendance','compensation','wallet'] : action == 'manage' ? area in ['payments','access'] : false) :
+        r == 'manager' ? (action == 'view' ? area in ['dashboard','leads','campaigns','employees','payments','reports','management','attendance','compensation','wallet','profile'] : action == 'add' ? area in ['leads','campaigns','employees','payments','management'] : action == 'edit' ? area in ['leads','campaigns','employees','payments','management','compensation','profile'] : action == 'delete' ? area in ['leads','campaigns','employees','payments','management'] : action == 'assign' ? area in ['leads','campaigns'] : action == 'export' ? area in ['leads','campaigns','employees','payments','reports','management','attendance','compensation','wallet'] : action == 'manage' ? area in ['payments'] : false) :
+        r == 'employee' ? (action == 'view' ? area in ['dashboard','leads','campaigns','payments','management','attendance','wallet','profile'] : action == 'add' ? area in ['leads','payments','management'] : action == 'edit' ? area in ['leads','payments','management','profile'] : action == 'delete' ? area in ['leads','payments','management'] : action == 'assign' ? area in ['leads'] : action == 'export' ? area in ['leads','campaigns','payments','management','attendance','wallet'] : action == 'manage' ? area in ['payments'] : false) : false;
+    }
+    function roleDefault(r, area, action) {
+      return r == 'super-admin' ? true : r == 'admin' ? (action == 'view' ? area in ['dashboard','leads','campaigns','employees','managers','admins','departments','payments','reports','forms','sheets','management','attendance','compensation','settings','wallet','profile'] : action == 'add' ? area in ['leads','campaigns','employees','managers','departments','payments','forms','sheets','management'] : action == 'edit' ? area in ['leads','campaigns','employees','managers','admins','departments','payments','forms','sheets','management','compensation','settings','profile'] : action == 'delete' ? area in ['leads','campaigns','employees','managers','departments','payments','forms','sheets','management'] : action == 'assign' ? area in ['leads','campaigns','managers'] : action == 'export' ? area in ['leads','campaigns','employees','managers','departments','payments','reports','forms','sheets','management','attendance','compensation','wallet'] : action == 'manage' ? area in ['payments','access'] : false) :
+        r == 'manager' ? (action == 'view' ? area in ['dashboard','leads','campaigns','employees','payments','reports','management','attendance','compensation','wallet','profile'] : action == 'add' ? area in ['leads','campaigns','employees','payments','management'] : action == 'edit' ? area in ['leads','campaigns','employees','payments','management','profile'] : action == 'delete' ? area in ['leads','campaigns','employees'] : action == 'assign' ? area in ['leads','campaigns'] : action == 'export' ? area in ['leads','campaigns','employees','reports'] : action == 'manage' ? area in ['payments'] : false) :
+        r == 'employee' ? (action == 'view' ? area in ['dashboard','leads','campaigns','payments','management','attendance','wallet','profile'] : action == 'add' ? area in ['leads','payments'] : action == 'edit' ? area in ['leads','payments','management','profile'] : action == 'export' ? area in ['leads'] : false) : false;
+    }
+    function permissionEnabled(user, r, area, action) {
+      let permissions = user.get('permissions',{});
+      let key = area + '_' + action;
+      return (r == 'admin' && user.get('permissionsVersion',0) < 2 && action == 'delete' && area in ['leads','employees','managers','departments','forms','management']) || (key in permissions ? permissions[key] == true : roleDefault(r,area,action));
+    }
+    // END GENERATED ROLE CAPABILITIES
+    function cap(area, action) {
+      let user = selfUser();
+      let r = user.get('role','');
+      return signedIn() && user.get('active',true) != false && roleCapability(r,area,action) &&
+        (r == 'super-admin' || permissionEnabled(user,r,area,action));
+    }
+    function userArea(data) { return data.get('role','') == 'employee' ? 'employees' : data.get('role','') == 'manager' ? 'managers' : 'admins'; }
+    function validCustomFields(data) { return data.customFields is map; }
+    function validPhoneCountryCode(data) {
+      return !('phoneCountryCode' in data) || (data.phoneCountryCode is string &&
+        data.phoneCountryCode.size() >= 2 && data.phoneCountryCode.size() <= 6);
+    }
+    function validDashboardLayout(data) { return !('dashboardLayout' in data) || (data.dashboardLayout is map && data.dashboardLayout.widgets is list && data.dashboardLayout.widgets.size() <= 20); }
+    function validUserData(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() <= 120 &&
+        data.phone is string && data.phone.size() >= 6 && data.phone.size() <= 30 && validPhoneCountryCode(data) && validCustomFields(data) &&
+        (!('departmentIds' in data) || (data.departmentIds is list && data.departmentIds.size() <= 20));
+    }
+    function validLeadData(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() <= 120 &&
+        data.phone is string && data.phone.size() >= 6 && data.phone.size() <= 30 && validPhoneCountryCode(data) &&
+        (!('email' in data) || data.email == null || (data.email is string && data.email.size() <= 254)) &&
+        (!('company' in data) || (data.company is string && data.company.size() <= 120)) &&
+        (!('source' in data) || (data.source is string && data.source.size() <= 120)) &&
+        (!('statusId' in data) || data.statusId is string) &&
+        (!('interest' in data) || data.interest == null || data.interest in ['hot','warm','cold','']) &&
+        (!('documents' in data) || (data.documents is list && data.documents.size() <= 50)) && (!('customFields' in data) || data.customFields is map) &&
+        (!('categoryId' in data) || data.categoryId == null || (data.categoryId is string && data.categoryId.size() <= 100)) &&
+        (!('datedNotes' in data) || (data.datedNotes is list && data.datedNotes.size() <= 100)) &&
+        (!('conversionAmount' in data) || (data.conversionAmount is number && data.conversionAmount >= 0));
+    }
+    function leadPhoneUnchanged(before, after, changed) {
+      return (!changed.hasAny(['campaignId','campaignVersion','campaignOnly','phone','phoneCountryCode','phoneNormalized','phoneKey','totalCallCount','lastCallAt','lastCallResult','lastCallNotAttendedReason','fileUploads']) ||
+        (after.get('campaignId',null) == before.get('campaignId',null) &&
+        after.get('campaignVersion',null) == before.get('campaignVersion',null) &&
+        after.get('campaignOnly',null) == before.get('campaignOnly',null) &&
+        after.get('phone', null) == before.get('phone', null) &&
+        after.get('phoneCountryCode', null) == before.get('phoneCountryCode', null) &&
+        after.get('phoneNormalized', null) == before.get('phoneNormalized', null) &&
+        after.get('phoneKey', null) == before.get('phoneKey', null) &&
+        after.get('totalCallCount', null) == before.get('totalCallCount', null) &&
+        after.get('lastCallAt', null) == before.get('lastCallAt', null) &&
+        after.get('lastCallResult', null) == before.get('lastCallResult', null) && after.get('lastCallNotAttendedReason',null) == before.get('lastCallNotAttendedReason',null) && after.get('fileUploads',[]) == before.get('fileUploads',[]))) &&
+        (!(before.get('campaignId',null) is string) || (after.get('categoryId',null) == before.get('categoryId',null) && after.get('ownerUid',null) == before.get('ownerUid',null) && after.get('departmentId',null) == before.get('departmentId',null)));
+    }
+    function leadPoolUnchanged(before, after) {
+      return isTopManagement() || after.get('managerPoolUid', null) == before.get('managerPoolUid', null) ||
+        (isManager() && after.get('ownerUid', null) == null && after.get('managerPoolUid', '') == request.auth.uid);
+    }
+    function validSaleData(data) {
+      return data.employeeUid is string && data.productId is string && data.leadId is string &&
+        data.totalAmount is number && data.totalAmount > 0 && data.verifiedPaidAmount == 0;
+    }
+    function validPaymentData(data) {
+      return data.amount is number && data.amount > 0 && data.saleId is string && data.productId is string &&
+        data.receiptPath is string && data.receiptPath.size() > 0 && data.receiptPath.size() <= 500;
+    }
+
+    // Provisioning and its one-time lock belong exclusively to the Admin SDK.
+    match /system/{docId} {
+      allow get: if docId == 'bootstrap' || isSuper();
+      allow list: if isSuper();
+      allow write: if false;
+    }
+
+    function employeeConversionPaymentUnchanged(before, after) {
+      return after.get('conversionPaymentStatus', null) == before.get('conversionPaymentStatus', null) ||
+        (after.get('statusId', '') == 'converted' && after.get('conversionPaymentStatus', null) == 'pending' &&
+          (before.get('conversionPaymentStatus', null) == null ||
+            before.get('conversionPaymentStatus', null) == 'pending' ||
+            before.get('conversionPaymentStatus', null) == 'rejected'));
+    }
+
+    function employeeLeadAssignmentUnchanged(before, after) {
+      // ownerUid / departmentId stay fixed; categoryId + managerId may change when moving categories
+      return after.get('ownerUid', null) == before.get('ownerUid', null) &&
+        after.get('departmentId', null) == before.get('departmentId', null);
+    }
+
+    function isAssignedLeadEmployee() {
+      return signedIn() && ownsLead(resource.data) && isEmployee();
+    }
+
+    function employeeLeadProtectedFieldsUnchanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        'ownerUid', 'departmentId', 'assignedAt',
+        'createdBy', 'createdByRole', 'leadFormId', 'createdAt'
+      ]);
+    }
+
+    function settingsBrandingUnchanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(
+        ['companyName','brandName', 'brandTagline', 'brandDisplay', 'themeColor', 'logoUrl']
+      );
+    }
+
+    match /settings/{docId} {
+      allow get: if (docId != 'deploy' && (signedIn() || docId == 'general')) || (isSuper() && cap('settings','view') && docId == 'deploy');
+      allow list: if signedIn() && (docId != 'deploy' || isSuper());
+      allow create: if docId != 'uploads' && (isTopManagement() && cap('settings','edit') && (isSuper() || (docId != 'deploy' && (docId != 'general' || !request.resource.data.keys().hasAny(['companyName','brandName','brandTagline','brandDisplay','themeColor','logoUrl'])))));
+      allow delete: if docId != 'uploads' && isSuper() && cap('settings','edit');
+      allow update: if docId != 'uploads' && ((isSuper() && docId == 'deploy') ||
+        (docId != 'deploy' && isTopManagement() && cap('settings','edit') && (isSuper() || settingsBrandingUnchanged())));
+    }
+
+    match /fileUploadTickets/{ticketId} { allow read, write: if false; }
+
+    match /deployJobs/{jobId} {
+      allow read: if isSuper();
+      allow write: if false;
+    }
+
+    match /users/{uid} {
+      allow get: if own(uid) || (cap(userArea(resource.data),'view') && (isSuper() || (isAdmin() && resource.data.get('role','') in ['employee','manager']) ||
+        (isManager() && managedEmployeeData(resource.data))));
+      allow list: if cap(userArea(resource.data),'view') && (own(uid) || isSuper() || (isAdmin() && resource.data.get('role','') in ['employee','manager']) ||
+        (isManager() && managedEmployeeData(resource.data)));
+      allow create: if false;
+      allow delete: if false;
+      // Team transfers go through the transactional assignment callable, including for admins.
+      allow update: if request.resource.data.role == resource.data.role &&
+        request.resource.data.email == resource.data.email && validUserData(request.resource.data) && validDashboardLayout(request.resource.data) && (
+        ((isSuper() || (isAdmin() && resource.data.role != 'super-admin' && (resource.data.role != 'admin' || own(uid))) || managesEmployee(uid)) && cap(userArea(resource.data),'edit') && (!isManager() || (request.resource.data.get('departmentId',null) == resource.data.get('departmentId',null) && request.resource.data.get('departmentIds',[]) == resource.data.get('departmentIds',[]))) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','phone','phoneCountryCode','photoURL','customFields','departmentId','departmentIds','active','updatedAt'])) ||
+        (own(uid) && cap('profile','edit') && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','phone','phoneCountryCode','photoURL','customFields','updatedAt'])) ||
+        (own(uid) && isTopManagement() && cap('dashboard','view') && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['dashboardLayout','updatedAt']))
+      );
+    }
+
+    match /departments/{departmentId} {
+      allow read: if signedIn() && assignedDepartment(departmentId);
+      allow create: if cap('departments','add') && (isTopManagement());
+      allow update: if cap('departments','edit') && (isTopManagement());
+      allow delete: if cap('departments','delete') && (isTopManagement());
+    }
+
+    match /leadStatuses/{statusId} {
+      allow read: if signedIn();
+      allow create: if cap('settings','edit') && isTopManagement();
+      allow update: if cap('settings','edit') && (isTopManagement());
+      allow delete: if cap('settings','edit') && (isTopManagement());
+    }
+
+    match /products/{productId} {
+      allow read: if signedIn();
+      // Retain existing financial references; the Programs feature is retired.
+      allow write: if false;
+    }
+
+    match /compensation/{uid} {
+      allow read: if cap('compensation','view') && (own(uid) || isTopManagement() ||
+        managesEmployee(uid));
+      allow create: if cap('compensation','edit') && (isTopManagement() || managesEmployee(uid));
+      allow update: if cap('compensation','edit') && (isTopManagement() || managesEmployee(uid));
+      allow delete: if cap('compensation','delete') && (isTopManagement());
+    }
+
+    match /leadCategories/{categoryId} {
+      allow read: if signedIn() && assignedCategory(categoryId,resource.data);
+      allow create: if cap('settings','edit') && (isTopManagement());
+      allow update: if cap('settings','edit') && (isTopManagement());
+      allow delete: if cap('settings','edit') && (isTopManagement());
+    }
+
+    function validFormCampaign(data){
+      let id=data.get('campaignId',null);
+      return id == null || data.get('active',true) == false || (id is string &&
+        get(/databases/$(database)/documents/campaigns/$(id)).data.get('active',true) != false &&
+        get(/databases/$(database)/documents/campaigns/$(id)).data.get('deleting',false) != true);
+    }
+    match /leadForms/{formId} {
+      allow read: if cap('forms','view') && (isTopManagement());
+      allow create: if cap('forms','add') && isTopManagement() && validFormCampaign(request.resource.data);
+      allow update: if cap('forms','edit') && isTopManagement() && validFormCampaign(request.resource.data);
+      allow delete: if cap('forms','delete') && (isTopManagement());
+    }
+
+    match /campaigns/{campaignId} {
+      allow read: if cap('campaigns','view') && (isTopManagement() || (isManager() && (resource.data.get('managerUid','') == request.auth.uid || resource.data.get('createdBy','') == request.auth.uid)) || (isEmployee() && request.auth.uid in resource.data.get('employeeUids',[])));
+      allow write: if false;
+    }
+    match /campaignLeads/{leadId} {
+      allow read: if cap('campaigns','view') && (isTopManagement() || managesLead(resource.data) || (isEmployee() && ownsLead(resource.data)));
+      allow write: if false;
+    }
+    function financialStateUnchanged() {
+      let before=resource.data; let after=request.resource.data;
+      let changed=after.diff(before).affectedKeys();
+      let reviewed=before.get('conversionPaymentStatus','') == 'verified' || before.get('conversionCommissionCredited',false) == true;
+      return !changed.hasAny(['conversionCommissionCredited','conversionCommissionAmount','conversionReviewedBy','conversionReviewNote','conversionReviewedAt']) &&
+        (!changed.hasAny(['conversionPaymentStatus']) ||
+          (after.get('conversionPaymentStatus',null) == 'pending' && before.get('conversionPaymentStatus',null) in [null,'pending','rejected'])) &&
+        (!reviewed || !changed.hasAny(['conversionAmount','paymentReceipts','conversionPaymentStatus']));
+    }
+
+    match /leads/{leadId} {
+      function leadPower(user,r,area,action){
+        return r == 'super-admin' || (roleCapability(r,area,action) && permissionEnabled(user,r,area,action));
+      }
+      function managerLeadScope(data){
+        return managerLeadData(data);
+      }
+      function paymentOnlyUpdate(){
+        let changed=request.resource.data.diff(resource.data).affectedKeys();
+        let before=resource.data;let after=request.resource.data;let user=selfUser();let r=user.get('role','');
+        let oldReceipts=before.get('paymentReceipts',[]);let receipts=after.get('paymentReceipts',[]);
+        return user.get('active',true) != false && changed.hasOnly(['conversionAmount','paymentReceipts','updatedAt']) && changed.hasAny(['conversionAmount','paymentReceipts']) &&
+          (r in ['super-admin','admin'] || (r == 'employee' && ownsLead(before)) || (r == 'manager' && managesLead(before))) &&
+          (!changed.hasAny(['conversionAmount']) || (after.conversionAmount is number && after.conversionAmount >= 0 && roleCapability(r,'payments','edit') && permissionEnabled(user,r,'payments','edit'))) &&
+          (!changed.hasAny(['paymentReceipts']) || (receipts is list && oldReceipts is list && receipts.size() <= 50 &&
+            (receipts.hasAll(oldReceipts) || (roleCapability(r,'payments','delete') && permissionEnabled(user,r,'payments','delete'))) &&
+            (oldReceipts.hasAll(receipts) || (roleCapability(r,'payments','add') && permissionEnabled(user,r,'payments','add')))));
+      }
+      function contactUpdate(){
+        let before=resource.data;
+        let after=request.resource.data;
+        let changed=after.diff(before).affectedKeys();
+        let user=selfUser();
+        let r=user.get('role','');
+        return user.get('active',true) != false &&
+          (leadPower(user,r,'leads','edit') || (changed.hasOnly(['ownerUid','departmentId','managerId','managerPoolUid','assignedAt','updatedAt']) && leadPower(user,r,'leads','assign'))) &&
+          (!changed.hasAny(['conversionPaymentStatus']) || after.get('conversionPaymentStatus','') == 'pending' || leadPower(user,r,'payments','manage')) &&
+          (!changed.hasAny(['conversionAmount']) || leadPower(user,r,'payments','edit')) &&
+          (!changed.hasAny(['paymentReceipts']) || (after.get('paymentReceipts',[]) is list && before.get('paymentReceipts',[]) is list &&
+            (after.get('paymentReceipts',[]).hasAll(before.get('paymentReceipts',[])) || leadPower(user,r,'payments','delete')) &&
+            (before.get('paymentReceipts',[]).hasAll(after.get('paymentReceipts',[])) || leadPower(user,r,'payments','add')))) &&
+          (!changed.hasAny(['ownerUid','assignedAt']) || leadPower(user,r,'leads','assign')) &&
+          validLeadData(after) && leadPhoneUnchanged(before,after,changed) &&
+          (r in ['super-admin','admin'] ||
+            (r == 'manager' && managerLeadScope(before) && managerLeadScope(after) && (!changed.hasAny(['ownerUid','departmentId']) || validDepartmentOwner(after)) &&
+              (after.get('managerPoolUid',null) == before.get('managerPoolUid',null) || (after.get('ownerUid',null) == null && after.get('managerPoolUid','') == request.auth.uid)) &&
+              employeeConversionPaymentUnchanged(before,after) &&
+              changed.hasOnly(['name','phone','phoneCountryCode','phoneNormalized','email','company','source','statusId','statusChangedAt','convertedAt','conversionAmount','conversionPaymentStatus','paymentReceipts','followUpAt','followUpType','lastCallAt','lastCallResult','callInitiatedAt','callInitiatedBy','callInitiatedByName','callInitiatedByRole','callClickCount','callCountsByCaller','notes','datedNotes','customFields','interest','documents','categoryId','managerId','managerPoolUid','ownerUid','departmentId','assignedAt','updatedAt'])) ||
+            (r == 'employee' && ownsLead(before) && ownsLead(after) &&
+              after.get('managerPoolUid',null) == before.get('managerPoolUid',null) &&
+              employeeLeadAssignmentUnchanged(before,after) && employeeConversionPaymentUnchanged(before,after) && employeeLeadProtectedFieldsUnchanged()));
+      }
+      allow read: if cap('leads','view') && (isTopManagement() ||
+        managesLead(resource.data) ||
+        (isEmployee() && ownsLead(resource.data)));
+
+      // All creation paths share the server's global phone uniqueness transaction.
+      allow create: if false;
+
+      allow update: if financialStateUnchanged() && (paymentOnlyUpdate() || contactUpdate());
+
+      allow delete: if cap('leads','delete') && (isTopManagement() || managesLead(resource.data) || (isEmployee() && ownsLead(resource.data)));
+      match /events/{eventId} {
+        function parentLead() { return get(/databases/$(database)/documents/leads/$(leadId)).data; }
+        allow read: if cap('leads','view') && (isTopManagement() || managesLead(parentLead()) || (isEmployee() && ownsLead(parentLead())));
+        allow write: if false;
+      }
+    }
+
+    match /sales/{saleId} {
+      allow read: if cap('payments','view') && (isTopManagement() ||
+        managesSale(resource.data) ||
+        (isEmployee() && resource.data.employeeUid == request.auth.uid));
+      // New conversions use lead payment records; keep existing sale history readable.
+      allow create: if false;
+      allow update: if cap('payments','edit') && (isTopManagement() ||
+        (isEmployee() && resource.data.employeeUid == request.auth.uid &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['notes','paymentPlan','additionalInstallments','updatedAt'])));
+      allow delete: if cap('payments','delete') && (isTopManagement() || managesSale(resource.data) || (isEmployee() && resource.data.employeeUid == request.auth.uid));
+    }
+
+    match /payments/{paymentId} {
+      allow read: if cap('payments','view') && (isTopManagement() ||
+        managesSale(resource.data) ||
+        (isEmployee() && resource.data.employeeUid == request.auth.uid));
+      allow create: if cap('payments','add') && (validPaymentData(request.resource.data) && request.resource.data.status == 'pending' &&
+        request.resource.data.employeeUid == get(/databases/$(database)/documents/sales/$(request.resource.data.saleId)).data.employeeUid &&
+        request.resource.data.productId == get(/databases/$(database)/documents/sales/$(request.resource.data.saleId)).data.productId &&
+        request.resource.data.departmentId == get(/databases/$(database)/documents/sales/$(request.resource.data.saleId)).data.departmentId &&
+        request.resource.data.managerId == get(/databases/$(database)/documents/sales/$(request.resource.data.saleId)).data.managerId && (
+          (isEmployee() && request.resource.data.employeeUid == request.auth.uid) ||
+          isTopManagement() ||
+          managesSale(request.resource.data)));
+      allow update: if cap('payments','edit') && (isEmployee() && resource.data.employeeUid == request.auth.uid && resource.data.status == 'pending' &&
+        request.resource.data.status == 'pending' && request.resource.data.amount is number && request.resource.data.amount > 0 &&
+        request.resource.data.saleId == resource.data.saleId && request.resource.data.productId == resource.data.productId &&
+        request.resource.data.departmentId == resource.data.departmentId && request.resource.data.managerId == resource.data.managerId &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['amount','paymentDate','receiptPath','receiptName','installmentLabel','notes','updatedAt']));
+      allow delete: if cap('payments','delete') && (isTopManagement() || managesSale(resource.data) || (isEmployee() && resource.data.employeeUid == request.auth.uid));
+    }
+
+    match /wallets/{uid} {
+      allow read: if cap('wallet','view') && (own(uid) || isTopManagement() ||
+        managesEmployee(uid));
+      allow write: if false;
+    }
+
+    match /walletTransactions/{txId} {
+      allow read: if cap('wallet','view') && (isTopManagement() ||
+        (signedIn() && resource.data.get('userId', '') == request.auth.uid) ||
+        managesEmployee(resource.data.get('userId', '')));
+      allow write: if false;
+    }
+
+    match /companyStats/{docId} {
+      allow read: if cap('reports','view') && (isTopManagement());
+      allow write: if false;
+    }
+    match /employeeStats/{uid} {
+      allow read: if cap('reports','view') && (own(uid) || isTopManagement() || managesEmployee(uid));
+      allow write: if false;
+    }
+    match /productStats/{productId} {
+      allow read: if cap('reports','view') && (isTopManagement());
+      allow write: if false;
+    }
+    match /departmentStats/{departmentId} {
+      allow read: if cap('reports','view') && isTopManagement();
+      allow write: if false;
+    }
+
+    match /activities/{activityId} {
+      allow read: if cap('leads','view') && (isTopManagement() ||
+        managesEmployee(resource.data.get('userId', '')) ||
+        (isEmployee() && resource.data.get('userId', '') == request.auth.uid));
+      allow create: if cap('leads','edit') && (signedIn() && request.resource.data.userId == request.auth.uid);
+      allow update: if cap('leads','edit') && signedIn() && resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid;
+      allow delete: if cap('leads','delete') && (own(resource.data.userId));
+    }
+
+    match /works/{workId} {
+      function workAssigneeRole() {
+        return resource.data.assigneeRole != null ? resource.data.assigneeRole : get(/databases/$(database)/documents/users/$(resource.data.assigneeUid)).data.role;
+      }
+      function adminStatusOnlyWorkUpdate() {
+        return resource.data.type == 'general' &&
+          request.resource.data.type == 'general' &&
+          request.resource.data.assigneeUid == resource.data.assigneeUid &&
+          request.resource.data.assigneeRole == resource.data.assigneeRole &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','postponedReason','postponedAt','updatedAt']);
+      }
+      function adminFullWorkUpdate() {
+        return workAssigneeRole() in ['manager','employee'] &&
+          request.resource.data.assigneeRole in ['manager','employee'] &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title','description','deadline','dailyTarget','recurrence','assigneeUid','assigneeName','assigneeRole','active','status','postponedReason','postponedAt','updatedAt']);
+      }
+      allow read: if cap('management','view') && (isTopManagement() ||
+        resource.data.get('assigneeUid', '') == request.auth.uid ||
+        managesEmployee(resource.data.get('assigneeUid', '')));
+      allow create: if cap('management','add') && (isTopManagement() ||
+        (isManager() && request.resource.data.createdBy == request.auth.uid &&
+          managesEmployee(request.resource.data.assigneeUid)) || (isEmployee() && request.resource.data.createdBy == request.auth.uid && request.resource.data.assigneeUid == request.auth.uid && request.resource.data.assigneeRole == 'employee'));
+      allow update: if cap('management','edit') && (isSuper() ||
+        (isAdmin() && (adminFullWorkUpdate() || adminStatusOnlyWorkUpdate())) ||
+        (managesEmployee(resource.data.assigneeUid) && managesEmployee(request.resource.data.assigneeUid) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title','description','deadline','dailyTarget','recurrence','assigneeUid','assigneeName','assigneeRole','active','status','postponedReason','postponedAt','periodProgress','periodLeadIds','periodStartedAt','lastPeriodFailed','failureCount','pendingFailureHistoryId','updatedAt'])) ||
+        (resource.data.assigneeUid == request.auth.uid &&
+          request.resource.data.assigneeUid == resource.data.assigneeUid &&
+          request.resource.data.assigneeRole == resource.data.assigneeRole &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title','description','assigneeName','deadline','dailyTarget','recurrence','active','status','postponedReason','postponedAt','periodProgress','periodLeadIds','periodStartedAt','lastPeriodFailed','failureCount','pendingFailureHistoryId','updatedAt'])));
+      allow delete: if cap('management','delete') && (isSuper() || (isAdmin() && (resource.data.assigneeUid == request.auth.uid || workAssigneeRole() in ['employee','manager'])) || managesEmployee(resource.data.get('assigneeUid','')) || (isEmployee() && resource.data.assigneeUid == request.auth.uid));
+    }
+
+    match /workHistory/{historyId} {
+      allow read: if cap('management','view') && (isTopManagement() ||
+        resource.data.get('assigneeUid', '') == request.auth.uid ||
+        managesEmployee(resource.data.get('assigneeUid', '')));
+      allow create: if cap('management','edit') && (isTopManagement() || own(request.resource.data.assigneeUid) || managesEmployee(request.resource.data.assigneeUid));
+      allow update: if cap('management','edit') && (signedIn() &&
+        resource.data.assigneeUid == request.auth.uid &&
+        resource.data.failed == true &&
+        resource.data.reasonPending == true &&
+        request.resource.data.reasonPending == false &&
+        request.resource.data.failureReason is string &&
+        request.resource.data.failureReason.size() > 0 &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['failureReason','reasonPending','reasonSubmittedAt']));
+      allow delete: if false;
+    }
+
+    match /users/{uid}/devices/{deviceId} {
+      allow read: if own(uid);
+      allow write: if false;
+    }
+
+    match /callRequests/{requestId} {
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow write: if false;
+    }
+
+    match /crmCallActivities/{activityId} {
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow write: if false;
+    }
+
+    match /callRateLimits/{uid} {
+      allow read, write: if false;
+    }
+
+    // OAuth credentials, checkpoints, source keys and logs are server-only. Callables
+    // enforce the current project's customer boundary and active administrator role.
+    match /leadFileImports/{id} {
+      allow read, write: if false;
+      match /{nested=**} { allow read, write: if false; }
+    }
+    match /leadFilePhoneKeys/{id} { allow read, write: if false; }
+    match /leadPhoneKeys/{id} { allow read, write: if false; }
+    match /crmSyncChanges/{path=**} { allow read, write: if false; }
+    match /googleSheetAccounts/{id} { allow read, write: if false; }
+    match /googleSheetOAuthStates/{id} { allow read, write: if false; }
+    match /googleSheetLeadImportKeys/{id} { allow read, write: if false; }
+    match /googleSheetConnections/{id} {
+      allow read, write: if false;
+      match /{nested=**} { allow read, write: if false; }
+    }
+    match /integrationSignals/{id} {
+      allow get: if signedIn() && (id == 'googleSheets' || id == 'team_' + request.auth.uid);
+      allow list, write: if false;
+    }
+
+    match /attendance/{recordId} {
+      allow read: if cap('attendance','view') && (isSuper() || isAdmin() || (
+        signedIn() && (
+          resource.data.get('userId', '') == request.auth.uid ||
+          managesEmployee(resource.data.get('userId', ''))
+        )
+      ));
+      allow write: if false;
+    }
+  }
+}

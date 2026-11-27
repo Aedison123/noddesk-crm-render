@@ -1,0 +1,26 @@
+node_modules/
+functions/node_modules/
+.firebase/
+.firebaserc.local
+*.log
+.DS_Store
+seed key
+seed-key*
+.env
+.env.*
+functions/.secret.local
+.firebase/emulator-data/
+
+# Secure deploy pipeline outputs (scripts in deploy/ are committed)
+/temp/
+deploy/temp/
+deploy/workspace/
+deploy/node_modules/
+deploy/config/
+deploy/.state.json
+
+# Google OAuth client downloads (never commit)
+client_secret_*.json
+
+# Render static-site staging output
+.render-site/

@@ -1,0 +1,33 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "crmSync": {
+      ".write": false,
+      "shared": { ".read": "auth != null" },
+      "top": { ".read": "auth != null && (auth.token.role === 'admin' || auth.token.role === 'super-admin')" },
+      "users": {
+        "$uid": { ".read": "auth != null && (auth.uid === $uid || auth.token.role === 'manager' || auth.token.role === 'admin' || auth.token.role === 'super-admin')" }
+      },
+      "departments": {
+        "$department": { ".read": "auth != null && (auth.token.role === 'manager' || auth.token.role === 'admin' || auth.token.role === 'super-admin')" }
+      }
+    },
+    "presence": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['state','lastChanged']) && (newData.child('state').val() === 'online' || newData.child('state').val() === 'offline')"
+      }
+    },
+    "devicePresence": {
+      "$uid": {
+        "$deviceId": {
+          ".read": "auth != null && auth.uid === $uid",
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.hasChildren(['state','lastChanged']) && (newData.child('state').val() === 'online' || newData.child('state').val() === 'offline' || newData.child('state').val() === 'idle')"
+        }
+      }
+    }
+  }
+}

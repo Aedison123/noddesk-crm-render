@@ -1,0 +1,39 @@
+services:
+  - type: web
+    runtime: static
+    name: noddesk-crm-frontend
+    buildCommand: npm ci --include=dev && node scripts/check-deploy-security.mjs && npm run build:css && npm run build:pwa && node scripts/prepare-render-site.mjs
+    staticPublishPath: ./.render-site
+    previews:
+      generation: automatic
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /*
+        name: Permissions-Policy
+        value: "camera=(), microphone=(), geolocation=()"
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: Strict-Transport-Security
+        value: "max-age=31536000; includeSubDomains"
+      - path: /*
+        name: Content-Security-Policy
+        value: "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://www.gstatic.com https://www.google.com https://www.gstatic.com/recaptcha/ https://www.gstatic.com/firebasejs/ https://connect.facebook.net https://www.googletagmanager.com https://*.firebaseio.com https://*.firebasedatabase.app; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data:; connect-src 'self' http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:* https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebasedatabase.app wss://*.firebasedatabase.app https://*.cloudfunctions.net https://*.run.app https://www.gstatic.com https://www.google.com https://firebase.googleapis.com https://connect.facebook.net https://www.facebook.com https://www.googletagmanager.com https://www.googleadservices.com https://googleads.g.doubleclick.net https://*.google-analytics.com; frame-src 'self' https://www.google.com https://www.gstatic.com https://*.firebaseapp.com; worker-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+      - path: /shared/js/*
+        name: Cache-Control
+        value: "no-cache, must-revalidate"
+      - path: /sw.js
+        name: Cache-Control
+        value: "no-cache"
+      - path: /manifest.webmanifest
+        name: Content-Type
+        value: "application/manifest+json"
+      - path: /manifest.webmanifest
+        name: Cache-Control
+        value: "public, max-age=3600"

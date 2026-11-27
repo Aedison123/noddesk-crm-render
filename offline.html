@@ -1,0 +1,19 @@
+<!doctype html>
+<html data-pwa lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="apple-touch-icon" href="/icons/icon-192.png"><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#2563eb"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="apple-mobile-web-app-title" content="NodDesk">
+  <title>Offline — NodDesk CRM</title>
+  <link rel="stylesheet" href="/shared/css/tailwind.css">
+  <link rel="stylesheet" href="/shared/css/app.css">
+</head>
+<body class="min-h-screen grid place-items-center bg-[#f7f9fc] p-6">
+  <div class="card p-8 max-w-md text-center">
+    <div class="mx-auto w-14 h-14 rounded-2xl bg-blue-600 text-white grid place-items-center font-black text-2xl">N</div>
+    <h1 class="text-xl font-bold mt-4">You are offline</h1>
+    <p class="text-sm text-slate-500 mt-2">NodDesk CRM needs an internet connection for live CRM data. Reconnect and refresh to continue.</p>
+    <button type="button" class="btn btn-primary mt-6" onclick="location.reload()">Try again</button>
+  </div>
+</body>
+</html>
